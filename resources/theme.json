@@ -1,0 +1,32 @@
+{
+     "button":
+     {
+     	 "font":
+     	 {
+     	     "name" : "crimson_text",
+     	     "size" : "20",
+     	     "regular_path" : "resources/CrimsonText-Roman.ttf"
+     	 },
+         "misc":
+         {
+             "border_width": "1",
+             "shadow_width": "2"
+         }
+    },
+    "@friendly_buttons":
+     {
+         "misc":
+         {
+             "shadow_width": "5",
+             "shape": "rounded_rectangle"
+         }
+    },
+    "#hello_button":
+     {
+         "misc":
+         {
+             "text_horiz_alignment": "left"
+         }
+    }
+    
+}
