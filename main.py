@@ -1,74 +1,76 @@
-import pygame
+import pygame as pg
 import pygame_menu
 import sys
-import pygame_gui
+import pygame_gui as pg_gui
 import random
-pygame.init()
-
-# scr - screen
-scr = pygame.display.set_mode((900, 900), pygame.RESIZABLE)
-manager = pygame_gui.UIManager((800, 600), "resources/theme.json")
-pygame.display.set_caption("D&D Companion")
-icon = pygame.image.load('images/dice.png')
-pygame.display.set_icon(icon)
-fps_clock = pygame.time.Clock()
-
-# drag n drop
-map = pygame.image.load('images/dice.png')
-maprec = map.get_rect()
-maprec.center = (200, 300)
-boxes = []
-for i in range(5):
-  x = random.randint(50, 700)
-  y = random.randint(50, 350)
-  w = random.randint(35, 65)
-  h = random.randint(35, 65)
-  box = pygame.Rect(x, y, w, h)
-  boxes.append(box)
-active_box = None
-# ui for battle
-char_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((350, 400), (100, 50)),
-                                            text='CHARACTER',
-                                            manager=manager)
-actions_button = pygame_gui.elements.UIButton(relative_rect=pygame.Rect((350, 275), (100, 50)),
-                                            text='ACTIONS',
-                                            manager=manager)
+import config
 
 
+class Game:
 
+    def __init__(self):
+        pg.init()
+        self.width = config.width
+        self.height = config.height
+        self.screen = pg.display.set_mode((self.width, self.height), pg.RESIZABLE)
+        pg.display.set_caption("D&D Companion")
+        pg.display.set_icon(pg.image.load('images/dice.png'))
+        # self.ui_surface = pg.Surface((config.width, config.height//4))
+        self.map_surface = pg.Surface((self.width, self.height - self.height // 4))
+        self.manager = pg_gui.UIManager((self.width, self.height), "resources/theme.json")
+        self.fps_clock = pg.time.Clock()
+        self.time_delta = self.fps_clock.tick(config.fps) / 1000.0
+        self.running = True
+        # self.char_btn = pg_gui.elements.UIButton(relative_rect=pg.Rect((350, 275), (100, 50)),
+        #  text='Say Hello',
+        #  manager=self.manager)
+        self.ui = pg_gui.elements.UIPanel(manager=self.manager,
+                                          relative_rect=pg.Rect(0, self.height - self.height // 4, self.width,
+                                                                self.height // 4))
+        self.char_btn = pg_gui.elements.UIButton(relative_rect=pg.Rect((10, 10), (self.ui.relative_rect.width // 4, (self.ui.relative_rect.height - 30) // 2)), text='CHARACTER LIST',
+                                                 manager=self.manager, container=self.ui)
+        self.roll_btn = pg_gui.elements.UIButton(relative_rect=pg.Rect((10, (self.ui.relative_rect.height - 30) // 2 + 20 ), (self.ui.relative_rect.width // 4, (self.ui.relative_rect.height - 30) // 2)), text='ROLL THE DICE',
+                                                 manager=self.manager, container=self.ui)
 
+    def run(self):
+        while self.running:
+            self.process_events()
+            self.render_screen()
+            self.fps_clock.tick(config.fps)
 
+    def render_screen(self):
+        self.screen.fill((84, 87, 91))
+        self.manager.draw_ui(self.screen)
+        # self.screen.blit(self.ui_surface, (0, config.height - config.height // 4))
+        self.screen.blit(self.map_surface, (0, 0))
+        pg.display.update()
 
-# main loop
-running = True
-while running:
-    time_delta = fps_clock.tick(60) / 1000.0
-    scr.fill((100, 50, 50))
-    scr.blit(map,maprec) # draw map surface on scr
-    for box in boxes:
-        pygame.draw.rect(scr, "white", box)
-    for event in pygame.event.get():
-        if event.type == pygame.MOUSEBUTTONDOWN:
+    def process_events(self):
+        for event in pg.event.get():
+            self.manager.update(self.time_delta)
+            self.manager.process_events(event)
+            if event.type == pg.QUIT:
+                self.running = False
+                pg.quit()
+                sys.exit()
+            if event.type == pg_gui.UI_BUTTON_PRESSED:
+                pass
+
+    def dragdrop(self, event, boxes):
+        if event.type == pg.MOUSEBUTTONDOWN:
             if event.button == 1:
                 for num, box in enumerate(boxes):
                     if box.collidepoint(event.pos):
                         active_box = num
-        if event.type == pygame.MOUSEBUTTONUP:
+        if event.type == pg.MOUSEBUTTONUP:
             if event.button == 1:
                 active_box = None
-        if event.type == pygame.MOUSEMOTION:
+        if event.type == pg.MOUSEMOTION:
             if active_box is not None:
                 boxes[active_box].move_ip(event.rel)
-        if event.type == pygame.QUIT:
-            running = False
-            pygame.quit()
-            sys.exit()
-        if event.type == pygame_gui.UI_BUTTON_PRESSED:
-            if event.ui_element == char_button:
-                print('Hello World!')
-        manager.process_events(event)
-    manager.update(time_delta)
-    manager.draw_ui(scr)
 
-    pygame.display.update()
-    fps_clock.tick(60)
+    class Entity(pg.sprite.Sprite):
+        pass
+
+game = Game()
+game.run()
