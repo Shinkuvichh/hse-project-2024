@@ -13,6 +13,20 @@
              "shadow_width": "2"
          }
     },
+    "file_dialog":
+    {
+    	"misc":
+         {
+    	"list_item_height": "26"
+    	}
+    },
+    "selection_list":
+    {
+    	"misc":
+         {
+    	"list_item_height": "30"
+    	}
+    },
     "@friendly_buttons":
      {
          "misc":
