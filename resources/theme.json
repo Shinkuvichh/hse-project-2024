@@ -1,46 +1,97 @@
 {
-     "button":
-     {
-     	 "font":
-     	 {
-     	     "name" : "crimson_text",
-     	     "size" : "20",
-     	     "regular_path" : "resources/CrimsonText-Roman.ttf"
-     	 },
-         "misc":
-         {
-             "border_width": "1",
-             "shadow_width": "2"
-         }
-    },
-    "file_dialog":
-    {
-    	"misc":
-         {
-    	"list_item_height": "26"
-    	}
-    },
-    "selection_list":
-    {
-    	"misc":
-         {
-    	"list_item_height": "30"
-    	}
-    },
-    "@friendly_buttons":
-     {
-         "misc":
-         {
-             "shadow_width": "5",
-             "shape": "rounded_rectangle"
-         }
-    },
-    "#hello_button":
-     {
-         "misc":
-         {
-             "text_horiz_alignment": "left"
-         }
+  "defaults": {
+    "colours": {
+      "normal_bg": "#303030",
+      "hovered_bg": "#525252",
+      "dark_bg": "#0F0F0F",
+      "disabled_bg": "#0F0F0F",
+      "selected_bg": "#0F0F0F",
+      "active_bg": "#0F0F0F",
+      "normal_text": "#FFFFFF",
+      "active_text": "#FFFFFF",
+      "hovered_text": "#FFFFFF",
+      "disabled_text": "#525252",
+      "normal_border": "#303030",
+      "active_border": "#303030",
+      "disabled_border": "#303030"
     }
-    
+  },
+  "button": {
+    "font": {
+      "name": "crimson_text",
+      "size": "22",
+      "regular_path": "resources/CrimsonText-Regular.ttf",
+      "bold_path": "resources/CrimsonText-Bold.ttf",
+      "italic_path": "resources/CrimsonText-Italic.ttf",
+      "bold_italic_path": "resources/CrimsonText-BoldItalic.ttf"
+    }
+  },
+  "file_dialog": {
+    "misc": {
+      "list_item_height": "26"
+    }
+  },
+  "text_box": {
+    "font": {
+      "name": "crimson_text",
+      "size": "22",
+      "regular_path": "resources/CrimsonText-Regular.ttf",
+      "bold_path": "resources/CrimsonText-Bold.ttf",
+      "italic_path": "resources/CrimsonText-Italic.ttf",
+      "bold_italic_path": "resources/CrimsonText-BoldItalic.ttf"
+    }
+  },
+  "selection_list": {
+    "misc": {
+      "list_item_height": "30"
+    }
+  },
+  "window": {
+    "misc": {
+      "title_bar_height": "30",
+      "enable_close_button": "1"
+    }
+  },
+  "#character_list.#description": {
+    "misc": {
+      "border_width": "0",
+      "line_spacing": "0.8"
+    }
+  },
+  "#entity": {
+    "colours": {
+      "dark_bg": "#0F0F0F80"
+    },
+    "misc": {
+      "enable_close_button": "0"
+    }
+  },
+  "#entity.#title_bar": {
+    "font": {
+      "name": "crimson_text",
+      "size": "15"
+    }
+  },
+  "#file_dialog.#file_display_list.#file_list_item": {
+    "colours": {
+      "normal_bg": "#303030"
+    }
+  },
+  "drop_down_menu": {
+    "misc": {
+      "expand_direction": "up",
+      "open_button_width": "0"
+    }
+  },
+  "vertical_scroll_bar": {
+    "misc": {
+      "enable_arrow_buttons": "0"
+    }
+  },
+  "panel": {
+    "misc": {
+      "shadow_width": "0",
+      "border_width": "0"
+    }
+  }
 }
