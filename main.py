@@ -1,18 +1,16 @@
 # cant prevent UserWarning, details : https//github.com/MyreMylar/pygame_gui/issues/192
-from typing import Union, Tuple
-
-import pygame
-import pygame as pg
 import sys
-import pygame_gui as pg_gui
-import config
-from pygame_gui.core import ObjectID
-from pygame_gui.core.utility import create_resource_path
-from pygame_gui.elements import UIButton, UIWindow, UIImage, UIPanel, UIDropDownMenu, UITextBox
-from pygame_gui import UIManager
-from pygame_gui.windows import UIFileDialog
 from pathlib import Path
 from random import randint
+import pygame
+import pygame as pg
+import pygame_gui as pg_gui
+from pygame_gui import UIManager
+from pygame_gui.core.utility import create_resource_path
+from pygame_gui.elements import UIButton, UIWindow, UIImage, UIPanel, UIDropDownMenu, UITextBox, UITextEntryLine
+from pygame_gui.windows import UIFileDialog
+import config
+from maps.maps_issue import similar_description
 
 
 class Game:
@@ -24,7 +22,7 @@ class Game:
         # self.screen = pg.display.set_mode((0,0), pg.FULLSCREEN)
         self.screen = pg.display.set_mode((self.width, self.height), pg.RESIZABLE)
         pg.display.set_caption("D&D Companion")
-        pg.display.set_icon(pg.image.load('images/dice.png'))
+        # pg.display.set_icon(pg.image.load('images/dice.png'))
         # self.ui_surface = pg.Surface((config.width, config.height//4))
         self.map_surface = pg.Surface((self.width, self.height - self.height / 4))
         self.map = pg.Surface((0, 0))
@@ -41,6 +39,7 @@ class Game:
         self.char_btn = UIButton(relative_rect=pg.Rect((10, 10), (
             (self.ui.relative_rect.width - 50) // 4, (self.ui.relative_rect.height - 30) // 2)), text='CHARACTER LIST',
                                  manager=self.manager, container=self.ui)
+        self.char_btn.disable()
         self.roll_btn = UIButton(relative_rect=pg.Rect((10, (self.ui.relative_rect.height - 30) // 2 + 20), (
             (self.ui.relative_rect.width - 50) / 16 * 3, (self.ui.relative_rect.height - 30) // 2)), text='ROLL',
                                  manager=self.manager, container=self.ui)
@@ -122,17 +121,7 @@ class Game:
                 self.load_btn.disable()
             if (event.type == pg_gui.UI_BUTTON_PRESSED and
                     event.ui_element == self.map_btn):
-                self.map_file_dialog = UIFileDialog(pygame.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
-                                                    self.manager,
-                                                    window_title='Upload map',
-                                                    initial_file_path='images/maps/',
-                                                    allow_picking_directories=True,
-                                                    allow_existing_files_only=True,
-                                                    allowed_suffixes={""})
-                self.map_file_dialog.refresh_button.kill()
-                self.map_file_dialog.delete_button.kill()
-                self.map_file_dialog.parent_directory_button.kill()
-                self.map_file_dialog.home_button.kill()
+                self.map_file_dialog = MapFileDialog(text="Upload map",init_path=config.player_maps_path)
                 self.map_btn.disable()
             if (event.type == pg_gui.UI_BUTTON_PRESSED and
                     event.ui_element == self.roll_btn):
@@ -142,23 +131,7 @@ class Game:
             if event.type == pg_gui.UI_FILE_DIALOG_PATH_PICKED:
                 if event.ui_element == self.map_file_dialog:
                     try:
-                        resource_path = pg_gui.core.utility.create_resource_path(event.text)
-                        loaded_image = pg.image.load(resource_path).convert_alpha()
-                        image_rect = loaded_image.get_rect()
-                        aspect_ratio = image_rect.width / image_rect.height
-                        need_to_scale = False
-                        if image_rect.width > self.map_surface_rect.width:
-                            image_rect.width = self.map_surface_rect.width
-                            image_rect.height = int(image_rect.width / aspect_ratio)
-                            need_to_scale = True
-                        if image_rect.height > self.map_surface_rect.height:
-                            image_rect.height = self.map_surface_rect.height
-                            image_rect.width = int(image_rect.height * aspect_ratio)
-                            need_to_scale = True
-                        if need_to_scale:
-                            loaded_image = pygame.transform.smoothscale(loaded_image,
-                                                                        image_rect.size)
-                        self.map = loaded_image
+                        self.map = image_to_surface(event.text, self.map_surface_rect.w, self.map_surface_rect.h)
                     except pg.error:
                         print("Error while changing map, path = ", event.text)
                 elif event.ui_element == self.sprite_file_dialog:
@@ -173,13 +146,13 @@ class Game:
             if event.type == pg_gui.UI_WINDOW_CLOSE and event.ui_element == self.sprite_file_dialog:
                 self.load_btn.enable()
                 self.sprite_file_dialog = None
-
-            if event.type == pg.KEYDOWN and event.key == pg.K_d:
-                print('debug mode on')
-                self.manager.set_visual_debug_mode(True)
-            if event.type == pg.KEYUP and event.key == pg.K_d:
-                print('debug mode off')
-                self.manager.set_visual_debug_mode(False)
+            if config.debug:
+                if event.type == pg.KEYDOWN and event.key == pg.K_d:
+                    print('debug mode on')
+                    self.manager.set_visual_debug_mode(True)
+                if event.type == pg.KEYUP and event.key == pg.K_d:
+                    print('debug mode off')
+                    self.manager.set_visual_debug_mode(False)
 
 
 def dragndrop(event, self):  # unused
@@ -197,19 +170,19 @@ def dragndrop(event, self):  # unused
             self.active_entity.rect.clamp_ip(self.map_surface_rect)
 
 
-def image_to_surface(image_path):
+def image_to_surface(image_path, maxw, maxh):
     resource_path = pg_gui.core.utility.create_resource_path(image_path)
     loaded_image = pg.image.load(resource_path).convert_alpha()
     image_rect = loaded_image.get_rect()
     aspect_ratio = image_rect.width / image_rect.height
     need_to_scale = False
-    if image_rect.width > config.entity_maxw:
-        image_rect.width = config.entity_maxw
+    if image_rect.width > maxw:
+        image_rect.width = maxw
         image_rect.height = int(image_rect.width / aspect_ratio)
         need_to_scale = True
 
-    if image_rect.height > config.entity_maxh:
-        image_rect.height = config.entity_maxh
+    if image_rect.height > maxh:
+        image_rect.height = maxh
         image_rect.width = int(image_rect.height * aspect_ratio)
         need_to_scale = True
     if need_to_scale:
@@ -224,10 +197,11 @@ class Entity(UIWindow):
 
         self.portrait = UIImage(relative_rect=pg.Rect((0, 0), self.get_container().get_size()),
                                 container=self,
-                                image_surface=image_to_surface(image_path), object_id="#portrait")
+                                image_surface=image_to_surface(image_path, config.entity_maxw, config.entity_maxh),
+                                object_id="#portrait")
 
         self.title_bar.allow_double_clicks = True
-        self.set_display_title("Monster")
+        self.set_display_title(image_path[image_path.rfind('/')+1:image_path.rfind('.')])
         self.char_list = CharacterList(self)
         if self.close_window_button is not None:
             self.close_window_button.set_text("...")  # override
@@ -273,10 +247,10 @@ class CharacterList(UIWindow):
                                                  allow_existing_files_only=True,
                                                  allowed_suffixes={""}, manager=None)
 
-            # self.list_file_dialog.refresh_button.kill()
-            # self.list_file_dialog.delete_button.kill()
-            # self.list_file_dialog.parent_directory_button.kill()
-            # self.list_file_dialog.home_button.kill()
+            self.list_file_dialog.refresh_button.kill()
+            self.list_file_dialog.delete_button.kill()
+            self.list_file_dialog.parent_directory_button.kill()
+            self.list_file_dialog.home_button.kill()
             self.upload_btn.disable()
         if event.type == pg_gui.UI_FILE_DIALOG_PATH_PICKED:
             if event.ui_element == self.list_file_dialog:
@@ -292,6 +266,40 @@ class CharacterList(UIWindow):
 
     def on_close_window_button_pressed(self):
         self.hide()
+
+
+class MapFileDialog(UIFileDialog):
+    def __init__(self, text, init_path):
+        super().__init__(pygame.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
+                         window_title=text,
+                         initial_file_path=init_path,
+                         allow_picking_directories=False,
+                         allow_existing_files_only=True,
+                         allowed_suffixes={""}, object_id="#map_dialog", manager=None)
+        self.refresh_button.kill()
+        self.delete_button.kill()
+        self.parent_directory_button.kill()
+        self.home_button.kill()
+        w, h = self.get_container().get_size()
+        self.map_prompt_text_line = UITextEntryLine(
+            relative_rect=pg.Rect(10, 40, self.get_container().get_size()[0] - 20, -1), container=self, initial_text="", object_id="#prompt_textline")
+        self.map_prompt_text_line.hide()
+        self.gen_btn = UIButton(relative_rect=pg.Rect(10, 10, -1, 30), text="Generate by description", container=self)
+
+    def process_event(self, event):
+        super().process_event(event)
+        if event.type == pg_gui.UI_TEXT_ENTRY_FINISHED and event.ui_element == self.map_prompt_text_line:
+            generated_map_path = similar_description(self.map_prompt_text_line.get_text())[0]
+            event_data = {'text': str(generated_map_path),
+                          'ui_element': self,
+                          'ui_object_id': self.most_specific_combined_id}
+            pg.event.post(pg.event.Event(pg_gui.UI_FILE_DIALOG_PATH_PICKED, event_data))
+            self.kill()
+        if event.type == pg_gui.UI_BUTTON_PRESSED and event.ui_element == self.gen_btn:
+            self.file_path_text_line.hide()
+            self.map_prompt_text_line.show()
+
+
 
 
 if __name__ == "__main__":

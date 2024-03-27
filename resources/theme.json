@@ -31,6 +31,12 @@
       "list_item_height": "26"
     }
   },
+  "#map_dialog.#prompt_textline": {
+    "font": {
+      "name": "freesansbold",
+      "size": "20"
+    }
+  },
   "text_box": {
     "font": {
       "name": "crimson_text",
