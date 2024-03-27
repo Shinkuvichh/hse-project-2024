@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer, util
 model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v1')
 
 data = []
-with open('maps/metadata.jsonl', 'r') as file:
+with open('metadata.jsonl', 'r') as file:
     for line in file:
         data.append(json.loads(line))
 
