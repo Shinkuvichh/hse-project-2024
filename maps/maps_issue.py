@@ -39,4 +39,5 @@ def similar_description(user_description):  # возвращает массив 
     sim_arr = sorted(sim_arr, key=lambda x: x[0], reverse=True)
     ans = []
     for score, i in sim_arr[0:3]:
-        ans.append("img/image_" + str(i + 1).zfill(3) + ".jpg")
+        ans.append("maps/img/image_" + str(i + 1).zfill(3) + ".jpg")
+    return ans
