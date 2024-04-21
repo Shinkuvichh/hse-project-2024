@@ -1,14 +1,7 @@
 # cant prevent UserWarning, details : https//github.com/MyreMylar/pygame_gui/issues/192
 import sys
-from pathlib import Path
-from random import randint
-import pygame
-import pygame as pg
-import pygame_gui as pg_gui
-from pygame_gui import UIManager
-from pygame_gui.core.utility import create_resource_path
-from pygame_gui.elements import UIButton, UIWindow, UIImage, UIPanel, UIDropDownMenu, UITextBox, UITextEntryLine
-from pygame_gui.windows import UIFileDialog
+from launcher import *
+
 import config
 from maps.maps_issue import similar_description
 
@@ -28,7 +21,7 @@ class Game:
         self.map = pg.Surface((0, 0))
         self.map_surface_rect = self.map_surface.get_rect()
         self.manager = UIManager((self.width, self.height), "resources/theme.json")
-
+        # self.manager.add_font_paths()
         self.fps_clock = pg.time.Clock()
         self.running = True
         self.time_delta = self.fps_clock.tick(config.fps) / 1000.0
