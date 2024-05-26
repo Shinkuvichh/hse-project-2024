@@ -7,7 +7,7 @@ import config
 class ClientEntity(UIWindow):
     def __init__(self, string_surface: bytes, scene_ui_manager, width, height):  # may throw
         super().__init__(rect=pg.Rect((30, 30), (config.entity_maxw, config.entity_maxh)), object_id="#entity",
-                         manager=scene_ui_manager)
+                         manager=scene_ui_manager, draggable=False)
         formatted_surface = scale_image(pg.image.frombuffer(buffer=string_surface, size=(width, height),
                                                             format="RGBA"), maxw=config.entity_maxw,
                                         maxh=config.entity_maxh)
@@ -20,7 +20,7 @@ class ClientEntity(UIWindow):
 
         self.title_bar.allow_double_clicks = True
         self.set_display_title("DEBUG MONSTER")
-        self.char_list = ClientCharacterList(self, scene_ui_manager=self.ui_manager)
+        self.char_list = EntityList(self, scene_ui_manager=self.ui_manager)
         if self.close_window_button is not None:
             self.close_window_button.set_text("...")  # override
 
@@ -30,7 +30,7 @@ class ClientEntity(UIWindow):
             self.char_list.show()
 
 
-class ClientCharacterList(UIWindow):  # to remake
+class EntityList(UIWindow):  # to remake
     def __init__(self, owner: ClientEntity, scene_ui_manager):
         super().__init__(rect=pg.Rect(0, 0, config.width // 3, config.height // 2),
                          window_display_title=f'{owner.title_bar.text} character list',
@@ -67,6 +67,8 @@ class ClientBoard:
         self.map = pg.Surface((0, 0))
         self.map_surface_rect = self.map_surface.get_rect()
         self.manager = UIManager((self.width, self.height), "resources/theme.json")
+        self.manager.add_font_paths(*font_paths)
+        self.manager.preload_fonts(fonts)
         self.fps_clock = pg.time.Clock()
         self.running = True
         self.time_delta = self.fps_clock.tick(config.fps) / 1000.0

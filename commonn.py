@@ -33,3 +33,12 @@ def img_path_to_surface(image_path, maxw, maxh):
     resource_path = pg_gui.core.utility.create_resource_path(image_path)
     loaded_image = pg.image.load(resource_path).convert_alpha()
     return scale_image(loaded_image, maxw, maxh)
+font_paths = ("CrimsonText",
+              "resources/fonts/CrimsonText-Regular.ttf",
+              "resources/fonts/CrimsonText-Bold.ttf",
+              "resources/fonts/CrimsonText-Italic.ttf",
+              "resources/fonts/CrimsonText-BoldItalic.ttf")
+
+fonts = [{'name': 'CrimsonText', 'point_size': 22, 'style': 'bold'},
+         {'name': 'CrimsonText', 'point_size': 22, 'style': 'italic'},
+         {'name': 'CrimsonText', 'point_size': 22, 'style': 'bold_italic'}]

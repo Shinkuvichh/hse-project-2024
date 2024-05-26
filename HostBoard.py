@@ -8,6 +8,7 @@ from commonn import *
 from itertools import count
 from base64 import b64encode, b64decode
 
+
 class Player:
     def __init__(self, ident):
         self.id = ident
@@ -21,24 +22,33 @@ class Entity(UIWindow):
     def __init__(self, image_path, scene_ui_manager, id):  # may throw
         super().__init__(rect=pg.Rect((30, 30), (config.entity_maxw, config.entity_maxh)), object_id="#entity",
                          manager=scene_ui_manager)
-
         self.portrait = UIImage(relative_rect=pg.Rect((0, 0), self.get_container().get_size()),
                                 container=self,
                                 image_surface=img_path_to_surface(image_path, config.entity_maxw, config.entity_maxh),
                                 object_id="#portrait",
-                                manager=scene_ui_manager)
-
+                                manager=self.ui_manager)
         self.title_bar.allow_double_clicks = True
         self.set_display_title(image_path[image_path.rfind('/') + 1:image_path.rfind('.')])
         self.char_list = CharacterList(self, scene_ui_manager=self.ui_manager)
         if self.close_window_button is not None:
-            self.close_window_button.set_text("...")  # override
+            self.close_window_button.set_text("-")  # override
         self.id = id
+        self.icon_btn = None
+
+    def show(self):
+        super().show()
+        self.icon_btn.kill()
 
     def process_event(self, event: pg.event.Event):
         super().process_event(event)
         if event.type == pg_gui.UI_BUTTON_DOUBLE_CLICKED and event.ui_element == self.title_bar:
             self.char_list.show()
+
+    def on_close_window_button_pressed(self):
+        self.hide()
+        self.icon_btn = UIButton(relative_rect=self.close_window_button.rect,
+                                 object_id="#icon_button",
+                                 manager=self.ui_manager, visible=True, command=self.show, text="")
 
 
 class MapFileDialog(UIFileDialog):
@@ -85,13 +95,13 @@ class CharacterList(UIWindow):  # THIS IS HOST VERSION!
         w = self.get_container().get_rect().width
         h = self.get_container().get_rect().height
         title_h = self.title_bar.relative_rect.height
-        print(self.relative_rect.w)
         self.textbox = UITextBox(relative_rect=pg.Rect(0, 0, w, h - title_h - 20),
                                  container=self, html_text="Upload this character's list from file.",
                                  object_id="#text_box", manager=scene_ui_manager)
         self.delete_btn = UIButton(relative_rect=pg.Rect(10, -title_h - 10, (w - 30) // 2, title_h), container=self,
                                    text="Delete entity",
-                                   anchors={"bottom": "bottom"}, object_id="#delete_button", starting_height=2, manager=scene_ui_manager)
+                                   anchors={"bottom": "bottom"}, object_id="#delete_button", starting_height=2,
+                                   manager=scene_ui_manager)
         self.upload_btn = UIButton(
             relative_rect=pg.Rect(-10 - (w - 30) // 2, -title_h - 10, (w - 30) // 2, title_h),
             container=self, text="Upload", anchors={"bottom": "bottom", "right": "right"},
@@ -136,6 +146,7 @@ class CharacterList(UIWindow):  # THIS IS HOST VERSION!
 class HostBoard:
 
     def __init__(self):
+
         self.NET_RECEIVED_UPDATE = pg.event.custom_type()
         self.debug_ev = pg.event.Event(self.NET_RECEIVED_UPDATE, {'update': 'roll', 'name': 'ClientB', 'dice': 20})
         self.data_queue = None
@@ -152,6 +163,8 @@ class HostBoard:
         self.map = pg.Surface((0, 0))
         self.map_surface_rect = self.map_surface.get_rect()
         self.manager = UIManager((self.width, self.height), "resources/theme.json")
+        self.manager.add_font_paths(*font_paths)
+        self.manager.preload_fonts(fonts)
         self.fps_clock = pg.time.Clock()
         self.running = True
         self.time_delta = self.fps_clock.tick(config.fps) / 1000.0
@@ -228,7 +241,6 @@ class HostBoard:
             pg.event.post(event)
         cancel_scope.cancel()
 
-
     async def sender(self, server_stream, game_stream, cancel_scope):
         async for data in game_stream:
             try:
@@ -236,6 +248,7 @@ class HostBoard:
             except trio.BrokenResourceError:
                 break
         cancel_scope.cancel()
+
     async def run(self):
         async with trio.open_nursery() as nursery:
             print("Starting mainloop..\n")
@@ -266,6 +279,7 @@ class HostBoard:
                 pg.quit()
                 sys.exit()
             if event.type == pg_gui.UI_BUTTON_PRESSED:
+                print(event.ui_object_id)
                 if event.ui_element == self.load_btn:
                     self.sprite_file_dialog = UIFileDialog(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
                                                            self.manager,
@@ -299,9 +313,9 @@ class HostBoard:
                                 player.send_channel.send_nowait(packet)
                                 player.sent_sprites.append(entity.id)
                     self.send_map()
-
-
-
+                if event.ui_object_id == "icon_button":
+                    event.ui_element.entity.show()
+                    event.ui_element.kill()
 
             if event.type == pg_gui.UI_FILE_DIALOG_PATH_PICKED:
                 if event.ui_element == self.map_file_dialog:
@@ -311,9 +325,10 @@ class HostBoard:
                         print("Error while changing map, path = ", event.text)
                 elif event.ui_element == self.sprite_file_dialog:
                     try:
-                        self.MapEntities.append(Entity(event.text, scene_ui_manager=self.manager, id = next(self.sprites_counter)))
-                    except pg.error:
-                        print(pg.error)
+                        self.MapEntities.append(
+                            Entity(event.text, scene_ui_manager=self.manager, id=next(self.sprites_counter)))
+                    except pg.error as error:
+                        print(f'Error while creating entity: {error}')
 
             if event.type == pg_gui.UI_WINDOW_CLOSE:
                 if event.ui_element == self.map_file_dialog:
@@ -352,10 +367,10 @@ class HostBoard:
                   'height': self.map.get_height()}
         self.send_packet(packet)
 
-
-    def send_surface(self, surface): #remake for client pp send
+    def send_surface(self, surface):  # remake for client pp send
         bytes = pg.image.tobytes(surface, format="RGBA")
-        packet = {'update': 'surface', 'string': bytes.decode(encoding='latin1'), 'width': surface.get_width(), 'height': surface.get_height()}
+        packet = {'update': 'surface', 'string': bytes.decode(encoding='latin1'), 'width': surface.get_width(),
+                  'height': surface.get_height()}
         self.send_packet(packet)
 
     def send_packet(self, unencoded_packet):
@@ -365,7 +380,7 @@ class HostBoard:
             for player in self.players:
                 player.send_channel.send_nowait(packet_size)
                 player.send_channel.send_nowait(packet)
-        except trio.WouldBlock: # raise a warning for host
+        except trio.WouldBlock:  # raise a warning for host
             return
 
     def get_relative_cords(self):
