@@ -1,45 +1,61 @@
-import json
-
 from commonn import *
+import json
+from pygame_gui.elements import UIButton, UIWindow, UIImage, UIPanel, UIDropDownMenu, UITextBox
 import config
+import sys
+import trio
+from pygame_gui import UIManager
 
 
 class ClientEntity(UIWindow):
-    def __init__(self, string_surface: bytes, scene_ui_manager, width, height):  # may throw
-        super().__init__(rect=pg.Rect((30, 30), (config.entity_maxw, config.entity_maxh)), object_id="#entity",
+    def __init__(self, string_surface: bytes, scene_ui_manager, width, height, topright, ident):  # may throw
+        init_rect = pg.Rect(0, 0, config.entity_maxw, config.entity_maxh)
+        init_rect.topright = topright
+        super().__init__(rect=init_rect, object_id="#entity",
                          manager=scene_ui_manager, draggable=False)
         formatted_surface = scale_image(pg.image.frombuffer(buffer=string_surface, size=(width, height),
                                                             format="RGBA"), maxw=config.entity_maxw,
                                         maxh=config.entity_maxh)
-
+        self.id = ident
         self.portrait = UIImage(relative_rect=pg.Rect((0, 0), self.get_container().get_size()),
                                 container=self,
                                 image_surface=formatted_surface,
                                 object_id="#portrait",
                                 manager=scene_ui_manager)
 
+        if self.close_window_button is not None:
+            self.close_window_button.set_text("-")
         self.title_bar.allow_double_clicks = True
         self.set_display_title("DEBUG MONSTER")
-        self.char_list = EntityList(self, scene_ui_manager=self.ui_manager)
-        if self.close_window_button is not None:
-            self.close_window_button.set_text("...")  # override
+        self.char_list = ClientEntityList(self, scene_ui_manager=self.ui_manager)
+        self.icon_btn = None
 
     def process_event(self, event: pg.event.Event):
         super().process_event(event)
         if event.type == pg_gui.UI_BUTTON_DOUBLE_CLICKED and event.ui_element == self.title_bar:
             self.char_list.show()
 
+    def show(self):
+        super().show()
+        self.icon_btn.kill()
 
-class EntityList(UIWindow):  # to remake
+    def on_close_window_button_pressed(self):
+        self.hide()
+        self.icon_btn = UIButton(relative_rect=self.close_window_button.rect,
+                                 object_id="#icon_button",
+                                 manager=self.ui_manager, visible=True, command=self.show, text="")
+
+
+class ClientEntityList(UIWindow):  # to remake
     def __init__(self, owner: ClientEntity, scene_ui_manager):
         super().__init__(rect=pg.Rect(0, 0, config.width // 3, config.height // 2),
                          window_display_title=f'{owner.title_bar.text} character list',
                          object_id="#character_list", visible=False, resizable=False, manager=scene_ui_manager)
+
         self.close_window_button.set_text("×")
         w = self.get_container().get_rect().width
         h = self.get_container().get_rect().height
         title_h = self.title_bar.relative_rect.height
-        print(self.relative_rect.w)  # debug
         self.textbox = UITextBox(relative_rect=pg.Rect(0, 0, w, h - title_h - 20),
                                  container=self, html_text="No character list for this entity!",
                                  object_id="#text_box")
@@ -54,8 +70,9 @@ class EntityList(UIWindow):  # to remake
 
 class ClientBoard:
     def __init__(self):
+        global NET_RECEIVED_UPDATE
+        NET_RECEIVED_UPDATE = pg.event.custom_type()
         self.bytebuffer = bytearray()
-        self.NET_RECEIVED_UPDATE = pg.event.custom_type()
         self.name = "ClientB"
         self.width = config.width
         self.height = config.height
@@ -111,25 +128,19 @@ class ClientBoard:
     async def listener(self, client_stream):
         print("listener started!")  # debug
         async for data in client_stream:  # use length prefixes
-            print("i am listening")
             self.bytebuffer.extend(data)
             if len(self.bytebuffer) >= 4:
-                print(f'packet size bytes = {self.bytebuffer[:4]}')
                 packet_size = int.from_bytes(self.bytebuffer[:4], byteorder='big')
-                print(f'packet_size = {packet_size}')
                 if len(self.bytebuffer) >= 4 + packet_size:
                     packet = json.loads((self.bytebuffer[4:4 + packet_size]).decode())
                     del self.bytebuffer[0:4 + packet_size]
-                    event = pg.event.Event(self.NET_RECEIVED_UPDATE, packet)
+                    event = pg.event.Event(NET_RECEIVED_UPDATE, packet)
                     pg.event.post(event)
-                    print("Got json and sent to event poll")
                     await trio.sleep(0)
         print("receiver: connection closed")
 
     async def sender(self, client_stream):
-        print("SENDER STARTED")
         while True:  # change to while scene
-            print(" !! sending")
             data = await self.receive_channel.receive()
             await client_stream.send_all(data)
             await trio.sleep(0)
@@ -170,32 +181,51 @@ class ClientBoard:
 
             if (event.type == pg_gui.UI_BUTTON_PRESSED and
                     event.ui_element == self.roll_btn):
-                dice_type = int(self.dice_btn.selected_option[1:])
+                dice_type = int(self.dice_btn.selected_option[0][1:])
                 data = json.dumps({"update": 'roll', "name": self.name, "dice": dice_type}).encode()
                 try:
                     self.send_channel.send_nowait(data)
                 except trio.WouldBlock:
                     print(f"Blocked request for dice roll")
                     return
-            if event.type == self.NET_RECEIVED_UPDATE:
+            if event.type == NET_RECEIVED_UPDATE:
                 dict = event.__dict__
-                if dict['update'] == 'surface':
-                    try:
-                        self.MapEntities.append(
-                            ClientEntity(string_surface=dict['string'].encode('latin1'), scene_ui_manager=self.manager,
-                                         width=dict['width'], height=dict['height']))
-                    except pg.error:
-                        print(pg.error)
-                if dict['update'] == 'roll':
-                    self.game_log.append_html_text(
-                        f'<p><strong>{dict["name"]}</strong> rolled <strong>D{dict["dice"]}</strong> and got {dict["result"]}.</p>')
-                if dict['update'] == 'player_left':
-                    self.game_log.append_html_text(
-                        f'<p><strong>{dict["name"]}</strong> left the game.</p>')
-                if dict['update'] == 'map':
-                    self.map = scale_image(
-                        pg.image.frombuffer(dict['string'].encode('latin1'), size=(dict['width'], dict['height']),
-                                            format="RGBA"), maxw=self.map_surface_rect.w, maxh=self.map_surface_rect.h)
+                match dict['update']:
+                    case 'delete_entity':
+                        for entity in self.MapEntities:
+                            if entity.id == dict['id']:
+                                self.MapEntities.remove(entity)
+                                entity.kill()
+                    case 'new_entity':
+                        try:
+
+                            self.MapEntities.append(
+                                ClientEntity(string_surface=dict['string'].encode('latin1'),
+                                             scene_ui_manager=self.manager,
+                                             width=dict['width'], height=dict['height'],
+                                             topright=self.get_cords_from_ratio(dict['ratio_x'], dict['ratio_y']),
+                                             ident=dict['id']))
+                        except pg.error:
+                            print(pg.error)
+                    case 'roll':
+                        self.game_log.append_html_text(
+                            f'<p><strong>{dict["name"]}</strong> rolled <strong>D{dict["dice"]}</strong> and got {dict["result"]}.</p>')
+                    case 'player_left':
+                        self.game_log.append_html_text(
+                            f'<p><strong>{dict["name"]}</strong> left the game.</p>')
+                    case 'map':
+                        self.map = scale_image(
+                            pg.image.frombuffer(dict['string'].encode('latin1'), size=(dict['width'], dict['height']),
+                                                format="RGBA"), maxw=self.map_surface_rect.w,
+                            maxh=self.map_surface_rect.h)
+                    case 'cords':
+                        cords = dict['entity:topright']
+                        for entity in self.MapEntities:
+                            id = str(entity.id)
+                            if id in cords:
+                                x, y = self.get_cords_from_ratio(*cords[id])
+                                x -= entity.relative_rect.width
+                                entity.set_position((x,y))
 
             if config.debug:
                 if event.type == pg.KEYDOWN and event.key == pg.K_d:
@@ -206,3 +236,9 @@ class ClientBoard:
                     self.manager.set_visual_debug_mode(False)
                 if event.type == pg_gui.UI_BUTTON_PRESSED:
                     print(event.ui_object_id)
+
+    def get_cords_from_ratio(self, ratio_x, ratio_y):
+        delta_x, delta_y = self.map.get_rect().topleft
+        x = delta_x + self.map.get_rect().width * ratio_x
+        y = delta_y + self.map.get_rect().height * ratio_y
+        return (x, y)

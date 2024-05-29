@@ -1,5 +1,5 @@
-width = 1280
-height = 720
+width = 1600
+height = 900
 fps = 60
 entity_maxw = 150
 entity_maxh = 200

@@ -18,7 +18,7 @@
   },
   "button": {
     "font": {
-      "name": "crimson_text",
+      "name": "CrimsonText",
       "size": "22",
       "regular_path": "resources/CrimsonText-Regular.ttf",
       "bold_path": "resources/CrimsonText-Bold.ttf",
@@ -39,12 +39,8 @@
   },
   "text_box": {
     "font": {
-      "name": "crimson_text",
-      "size": "22",
-      "regular_path": "resources/CrimsonText-Regular.ttf",
-      "bold_path": "resources/CrimsonText-Bold.ttf",
-      "italic_path": "resources/CrimsonText-Italic.ttf",
-      "bold_italic_path": "resources/CrimsonText-BoldItalic.ttf"
+      "name": "CrimsonText",
+      "size": "22"
     }
   },
   "selection_list": {
@@ -69,12 +65,13 @@
       "dark_bg": "#0F0F0F80"
     },
     "misc": {
-      "enable_close_button": "0"
+      "enable_close_button": "1",
+      "shadow_width": "0"
     }
   },
   "#entity.#title_bar": {
     "font": {
-      "name": "crimson_text",
+      "name": "CrimsonText",
       "size": "15"
     }
   },
@@ -98,6 +95,18 @@
     "misc": {
       "shadow_width": "0",
       "border_width": "0"
+    }
+  },
+  "#icon_button": {
+    "images": {
+      "normal_image": {
+        "path": "resources/__monstericon.png",
+        "sub_surface_rect" : "0,0,30,30"
+      },
+      "hovered_image": {
+        "path": "resources/__monstericon.png",
+        "sub_surface_rect" : "0,0,30,30"
+      }
     }
   }
 }

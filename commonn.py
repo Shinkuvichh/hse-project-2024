@@ -2,14 +2,11 @@ from pathlib import Path
 from random import randint
 import pygame as pg
 import pygame_gui as pg_gui
-from pygame_gui import UIManager
-from pygame_gui.core.utility import create_resource_path
-from pygame_gui.elements import UIButton, UIWindow, UIImage, UIPanel, UIDropDownMenu, UITextBox, UITextEntryLine
-from pygame_gui.windows import UIFileDialog
-import config
-import sys
-import trio
 
+from pygame_gui.core.utility import create_resource_path
+
+NET_RECEIVED_UPDATE = 0
+ENTITY_DELETED = 0
 
 def scale_image(image, maxw, maxh):
     image_rect = image.get_rect()

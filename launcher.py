@@ -1,9 +1,12 @@
 from commonn import *
+from pygame_gui.elements import UIButton, UIDropDownMenu
+import config
+import sys
+from pygame_gui import UIManager
 
 
 class Launcher:
     def __init__(self):
-        pg.init()
         self.width = 600
         self.height = 600
         self.new_scene = None
