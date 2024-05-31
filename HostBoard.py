@@ -1,44 +1,29 @@
 import json
+import pickle
+import sys
 from itertools import count
 from pathlib import Path
-from commonn import *
-from pygame_gui.elements import UIButton, UIWindow, UIImage, UIPanel, UIDropDownMenu, UITextBox, UITextEntryLine
-from pygame_gui.windows import UIFileDialog
-import config
-import sys
+from random import randint
+
 import trio
 from pygame_gui import UIManager
-import pickle
+from pygame_gui.elements import UIPanel, UIDropDownMenu
+from pygame_gui.windows import UIFileDialog
 
+from commonn import *
 
-class SaveFile:
-    def __init__(self, ident):
-        # can use pickle because saves are local for host
-        # json for over-tcp packages
-        self.entities_data = []
-        self.ident = ident
-        self.map = pg.Surface((10, 10))
-        self.map_size = (0, 0)
-
-
-class Player:
-    def __init__(self, ident):
-        self.id = ident
-        self.name = 'clientName'
-        self.send_channel, self.receive_channel = trio.open_memory_channel(max_buffer_size=config.max_buffer_size)
-        self.sent_sprites = []
-        self.ingame = True
+NET_RECEIVED_UPDATE = 0
+ENTITY_DELETED = 0
 
 
 class Entity(UIWindow):
     def __init__(self, scene_ui_manager, ident, image_path=None, bytes_image=None, list_text=None, size=None,
-                 topright=None):  # may throw
+                 topright=None, name="New entity"):  # may throw
         init_rect = pg.Rect(30, 30, config.entity_maxw, config.entity_maxh)
         if topright is not None:
             init_rect.topright = topright
         super().__init__(rect=init_rect, object_id="#entity",
                          manager=scene_ui_manager)
-        image = None
         if bytes_image is not None:
             image = pg.image.frombytes(bytes_image, format="RGBA", size=size)
         else:
@@ -49,16 +34,18 @@ class Entity(UIWindow):
                                 object_id="#portrait",
                                 manager=self.ui_manager)
         self.title_bar.allow_double_clicks = True
-        self.set_display_title('New monster')
+        self.set_display_title(name)
+        self.name = name
         self.entity_list = EntityList(self, scene_ui_manager=self.ui_manager, text=list_text)
         self.changed_list = False
         if self.close_window_button is not None:
             self.close_window_button.set_text("-")  # override
-        self.id = ident
+        self.id = str(ident)
         self.image_was_sent = False
         self.icon_btn = None
 
     def show(self):
+        """Start rendering entity and it's parts. During game called by clicking on icon button (minimized entity)"""
         super().show()
         self.icon_btn.kill()
 
@@ -70,83 +57,8 @@ class Entity(UIWindow):
     def on_close_window_button_pressed(self):
         self.hide()
         self.icon_btn = UIButton(relative_rect=self.close_window_button.rect,
-                                 object_id="#icon_button",
+                                 object_id=ObjectID(class_id="entity", object_id="#entity_icon_button"),
                                  manager=self.ui_manager, visible=True, command=self.show, text="")
-
-
-class SaveFileDialog(UIFileDialog):
-    def __init__(self, text, init_path, scene_ui_manager):
-        super().__init__(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
-                         window_title=text,
-                         initial_file_path=init_path,
-                         allow_picking_directories=False,
-                         allow_existing_files_only=True,
-                         allowed_suffixes={""}, object_id="#save_dialog", manager=scene_ui_manager)
-        self.refresh_button.kill()
-        self.delete_button.kill()
-        self.parent_directory_button.kill()
-        self.home_button.kill()
-        self.create_btn = UIButton(relative_rect=pg.Rect(10, 10, -1, 30), text="Or create new save with name:",
-                                   container=self, manager=scene_ui_manager)
-        self.new_save_text_line = UITextEntryLine(
-            relative_rect=pg.Rect(self.create_btn.relative_rect.right, 10,
-                                  self.file_path_text_line.rect.width - self.create_btn.relative_rect.width, 30),
-            container=self,
-            initial_text="",
-            object_id="#save_textline", manager=scene_ui_manager)
-
-    def process_event(self, event):
-        super().process_event(event)
-        if event.type == pg_gui.UI_BUTTON_PRESSED and event.ui_element == self.create_btn:
-            filename = self.new_save_text_line.get_text()
-            if not filename:
-                return
-            if not filename.endswith('.save'):
-                filename += '.save'
-            filename = Path(self.current_directory_path) / filename
-            print(filename)
-            try:
-                savefile = open(filename, 'w')
-            except OSError:
-                print(f'Error while creating savefile with name {filename}')
-                return
-            self.update_current_file_list()
-            self.file_selection_list.set_item_list(self.current_file_list)
-
-
-class MapFileDialog(UIFileDialog):
-    def __init__(self, text, init_path, scene_ui_manager):
-        super().__init__(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
-                         window_title=text,
-                         initial_file_path=init_path,
-                         allow_picking_directories=False,
-                         allow_existing_files_only=True,
-                         allowed_suffixes={""}, object_id="#map_dialog", manager=scene_ui_manager)
-        self.refresh_button.kill()
-        self.delete_button.kill()
-        self.parent_directory_button.kill()
-        self.home_button.kill()
-        w, h = self.get_container().get_size()
-        self.map_prompt_text_line = UITextEntryLine(
-            relative_rect=pg.Rect(10, 40, self.get_container().get_size()[0] - 20, -1), container=self,
-            initial_text="",
-            object_id="#prompt_textline", manager=scene_ui_manager)
-        self.map_prompt_text_line.hide()
-        self.gen_btn = UIButton(relative_rect=pg.Rect(10, 10, -1, 30), text="Generate by description",
-                                container=self, manager=scene_ui_manager)
-
-    def process_event(self, event):
-        super().process_event(event)
-        if event.type == pg_gui.UI_TEXT_ENTRY_FINISHED and event.ui_element == self.map_prompt_text_line:
-            generated_map_path = similar_description(self.map_prompt_text_line.get_text())[0]
-            event_data = {'text': str(generated_map_path),
-                          'ui_element': self,
-                          'ui_object_id': self.most_specific_combined_id}
-            pg.event.post(pg.event.Event(pg_gui.UI_FILE_DIALOG_PATH_PICKED, event_data))
-            self.kill()
-        if event.type == pg_gui.UI_BUTTON_PRESSED and event.ui_element == self.gen_btn:
-            self.file_path_text_line.hide()
-            self.map_prompt_text_line.show()
 
 
 class EntityList(UIWindow):  # THIS IS HOST VERSION!
@@ -178,7 +90,7 @@ class EntityList(UIWindow):  # THIS IS HOST VERSION!
         if event.type == pg_gui.UI_BUTTON_PRESSED and event.ui_element == self.upload_btn:
             self.list_file_dialog = UIFileDialog(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
                                                  window_title='Choose file',
-                                                 initial_file_path='character lists/',
+                                                 initial_file_path=config.entity_lists_path,
                                                  allow_picking_directories=False,
                                                  allow_existing_files_only=True,
                                                  allowed_suffixes={""}, manager=self.ui_manager)
@@ -196,11 +108,14 @@ class EntityList(UIWindow):  # THIS IS HOST VERSION!
         if event.type == pg_gui.UI_FILE_DIALOG_PATH_PICKED:
             if event.ui_element == self.list_file_dialog:
                 try:
+                    # noinspection PyUnresolvedReferences
                     resource_path = pg_gui.core.utility.create_resource_path(event.text)
                     text = Path(resource_path).read_text()
                     self.textbox.set_text(text)
                 except pg.error:
                     print("Error while uploading char list, path = ", event.text)
+                else:
+                    self.owner_entity.changed_list = True
 
         if event.type == pg_gui.UI_WINDOW_CLOSE and event.ui_element == self.list_file_dialog:
             self.upload_btn.enable()
@@ -218,15 +133,14 @@ class HostBoard:
         NET_RECEIVED_UPDATE = pg.event.custom_type()
         global ENTITY_DELETED
         ENTITY_DELETED = pg.event.custom_type()
-        self.data_queue = None
         self.players = []
-
+        self.new_scene = None
         self.put_channel, self.get_channel = trio.open_memory_channel(max_buffer_size=100)
         self.connection_counter = count()
         self.sprites_counter = count()
         self.width = config.width
         self.height = config.height
-        self.screen = pg.display.set_mode((self.width, self.height))
+        self.screen = pg.display.set_mode((self.width, self.height), pg.FULLSCREEN if config.fullscreen else 0)
         pg.display.set_caption("D&D Companion")
         self.map_surface = pg.Surface((self.width, self.height - self.height / 4))
         self.changed_map = False
@@ -281,6 +195,11 @@ class HostBoard:
             (self.ui.relative_rect.width - 50) // 4 * 2 + 30, 0,
             (self.ui.relative_rect.width - 50) // 4, self.ui.relative_rect.height), container=self.ui,
                                   manager=self.manager)
+        self.exit_btn = UIButton(relative_rect=pg.Rect(self.width - (self.ui.relative_rect.width - 50) // 4 - 10,
+                                                       (self.ui.relative_rect.height - 30) // 2 + 20,
+                                                       (self.ui.relative_rect.width - 50) // 4,
+                                                       (self.ui.relative_rect.height - 30) // 2), text="LEAVE GAME",
+                                 manager=self.manager, container=self.ui)
         self.game_log.set_active_effect(pg_gui.TEXT_EFFECT_FADE_IN)
         self.map_entities = []
         self.deleted_entities = []
@@ -289,19 +208,23 @@ class HostBoard:
         self.sprite_file_dialog = None
         self.save_file_dialog = None
         self.load_file_dialog = None
+        self.player_entities = []
 
     async def initialize_player(self, server_stream):
         ident = next(self.connection_counter)
-        print(f"echo_server {ident}: started")
+        print(f"Connection {ident} opened")
         try:
-            player = Player(ident)
+            player = PlayerData(ident)
             self.players.append(player)
             map_to_send = self.map
-            print(map_to_send)
+            init_packet = json.dumps({'update': 'init', 'id': player.id}).encode()
+            init_packet_size = len(init_packet).to_bytes(4, byteorder='big')
+            player.send_channel.send_nowait(init_packet_size)
+            player.send_channel.send_nowait(init_packet)
             if self.changed_map:
                 map_to_send = self.old_map  # if player left and reconnected before host sent new map
-            bytes = pg.image.tobytes(map_to_send, format="RGBA")
-            map_packet = {'update': 'map', 'string': bytes.decode(encoding='latin1'),
+            image_bytes = pg.image.tobytes(map_to_send, format="RGBA")
+            map_packet = {'update': 'map', 'string': image_bytes.decode(encoding='latin1'),
                           'width': map_to_send.get_width(),
                           'height': map_to_send.get_height()}
             map_packet = json.dumps(map_packet).encode()
@@ -311,50 +234,74 @@ class HostBoard:
                 player.send_channel.send_nowait(map_packet)
             except trio.WouldBlock:
                 self.game_log.append_html_text(f"Can't sync with new player")  # can't happen with new empty buffer
-                return
 
             for entity in self.map_entities:
                 if entity.image_was_sent:
                     x, y = self.get_cords_ratio(entity)
                     surface = entity.portrait.image
-                    bytes = pg.image.tobytes(surface, format="RGBA")
-                    entity_packet = {'update': 'new_entity', 'string': bytes.decode(encoding='latin1'),
+                    image_bytes = pg.image.tobytes(surface, format="RGBA")
+                    entity_packet = {'update': 'new_entity', 'string': image_bytes.decode(encoding='latin1'),
                                      'width': surface.get_width(), 'height': surface.get_height(), 'ratio_x': x,
-                                     'ratio_y': y, 'id': entity.id}
+                                     'ratio_y': y, 'id': entity.id, 'name': entity.name}
                     entity_packet = json.dumps(entity_packet).encode()
                     entity_packet_size = len(entity_packet).to_bytes(4, byteorder='big')
                     try:
                         player.send_channel.send_nowait(entity_packet_size)
                         player.send_channel.send_nowait(entity_packet)
                     except trio.WouldBlock:  # may happen if you have config.max_buffer_size unsent packets
-                        self.game_log.append_html_text(f"Can't send update to new player")
-                        return
-
+                        self.game_log.append_html_text(f"Can't send updates to new player")
+            for old_player in self.player_entities:
+                player_packet = old_player.dump()
+                player_packet['update'] = 'new_player'
+                player_packet['id'] = old_player.id
+                player_packet = json.dumps(player_packet).encode()
+                try:
+                    player.send_channel.send_nowait(len(player_packet).to_bytes(4, byteorder='big'))
+                    player.send_channel.send_nowait(player_packet)
+                except trio.WouldBlock:  # may happen if you have config.max_buffer_size unsent packets
+                    self.game_log.append_html_text(f"Can't send updates to new player")
             async with trio.open_nursery() as nursery:
-                nursery.start_soon(self.listener, server_stream, nursery.cancel_scope)
+                nursery.start_soon(self.listener, server_stream, nursery.cancel_scope, ident)
                 nursery.start_soon(self.sender, server_stream, player.receive_channel, nursery.cancel_scope)
         except Exception as exc:
-            print(f"server {ident}: crashed: {exc!r}")
+            print(f"player listener {ident}: crashed: {exc}")
         finally:
-            self.remove_player(ident)
+            self.remove_player(str(ident))
 
-    def remove_player(self, id):
+    def remove_player(self, removed_id):
         for p in self.players:
-            if p.id == id:
-                packet = {'update': 'player_left', 'name': p.name}
+            if p.id == removed_id:
+                packet = {'update': 'player_left', 'id': p.id, 'name': p.name}
                 self.game_log.append_html_text(
                     f'<p><strong>{p.name}</strong> left the game.</p>')
                 self.players.remove(p)
                 # delete from bottom panel
                 self.send_packet(packet)
+                break
+        for p in self.player_entities:
+            if p.id == removed_id:
+                p.kill()
+                self.player_entities.remove(p)
                 return
 
-    async def listener(self, server_stream, cancel_scope):
-        async for data in server_stream:
-            data_decoded = json.loads(data.decode())
-            event = pg.event.Event(NET_RECEIVED_UPDATE, data_decoded)
-            pg.event.post(event)
-        cancel_scope.cancel()
+    async def listener(self, server_stream, cancel_scope, ident):
+        try:
+            bytebuffer = bytearray()
+            print(f'Listener {ident} started')
+            async for data in server_stream:
+                bytebuffer.extend(data)
+                if len(bytebuffer) >= 4:
+                    packet_size = int.from_bytes(bytebuffer[:4], byteorder='big')
+                    if len(bytebuffer) >= 4 + packet_size:
+                        packet = json.loads((bytebuffer[4:4 + packet_size]).decode())
+                        del bytebuffer[0:4 + packet_size]
+                        packet['id'] = str(ident)
+                        event = pg.event.Event(NET_RECEIVED_UPDATE, packet)
+                        pg.event.post(event)
+                        await trio.sleep(0)
+            cancel_scope.cancel()
+        except Exception as e:
+            print(f'Listener {ident} crashed: {e}')
 
     async def sender(self, server_stream, game_stream, cancel_scope):
         async for data in game_stream:
@@ -362,22 +309,24 @@ class HostBoard:
                 await server_stream.send_all(data)
             except trio.BrokenResourceError:
                 break
+            await trio.sleep(0)
         cancel_scope.cancel()
 
     async def run(self):
         async with trio.open_nursery() as nursery:
             print("Starting mainloop..\n")
-            nursery.start_soon(self.main_loop)
+            nursery.start_soon(self.main_loop, nursery.cancel_scope)
             nursery.start_soon(trio.serve_tcp, self.initialize_player, config.port)
 
-    async def main_loop(self):
-        while self.running:
+    async def main_loop(self, cancel_scope):
+        while self.new_scene is None:
             self.time_delta = self.fps_clock.tick(config.fps) / 1000.0
             self.process_events()
             self.manager.update(self.time_delta)
             self.render_screen()
             self.fps_clock.tick(config.fps)
             await trio.sleep(0)
+        cancel_scope.cancel()
 
     def render_screen(self):
         self.map_surface.fill(config.fill_color)
@@ -394,17 +343,19 @@ class HostBoard:
                 pg.quit()
                 sys.exit()
             if event.type == ENTITY_DELETED:
-                id = event.__dict__['id']
+                deleted_entity_id = str(event.__dict__['id'])
                 for entity in self.map_entities:
-                    if entity.id == id:
+                    if entity.id == deleted_entity_id:
                         self.map_entities.remove(entity)
-                        self.deleted_entities.append(id)
+                        self.deleted_entities.append(deleted_entity_id)
             if event.type == pg_gui.UI_BUTTON_PRESSED:
+                if event.ui_element == self.exit_btn:
+                    self.new_scene = "Launcher"
                 if event.ui_element == self.load_save_btn:
                     self.load_file_dialog = UIFileDialog(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
                                                          self.manager,
                                                          window_title='Choose savefile to load',
-                                                         initial_file_path='saves/',
+                                                         initial_file_path=config.saves_path,
                                                          allow_picking_directories=False,
                                                          allow_existing_files_only=True,
                                                          allowed_suffixes={""})
@@ -417,8 +368,8 @@ class HostBoard:
                 if event.ui_element == self.load_btn:
                     self.sprite_file_dialog = UIFileDialog(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
                                                            self.manager,
-                                                           window_title='Upload sprite',
-                                                           initial_file_path='images/',
+                                                           window_title='Upload entity',
+                                                           initial_file_path=config.images_path,
                                                            allow_picking_directories=False,
                                                            allow_existing_files_only=True,
                                                            allowed_suffixes={""})
@@ -438,10 +389,10 @@ class HostBoard:
                     if self.changed_map:
                         self.send_map()
                         self.changed_map = False
-                    for id in self.deleted_entities:
-                        packet = {'update': 'delete_entity', 'id': id}
+                    for deleted_entity_id in self.deleted_entities:
+                        packet = {'update': 'delete_entity', 'id': deleted_entity_id}
                         self.send_packet(packet)
-                        self.deleted_entities.remove(id)
+                        self.deleted_entities.remove(deleted_entity_id)
                     cords_packet = {'update': 'cords', 'entity:topright': {}}
                     updated_cords = []
                     for entity in self.map_entities:
@@ -449,18 +400,31 @@ class HostBoard:
                         if entity.image_was_sent:
                             updated_cords.append((entity.id, (x, y)))
                             if entity.changed_list:
-                                pass
+                                packet = {'update': 'entity_list', 'list': entity.entity_list.textbox.html_text,
+                                          'id': entity.id}
+                                self.send_packet(packet)
+                                entity.changed_list = False
                         else:
                             surface = entity.portrait.image
-                            bytes = pg.image.tobytes(surface, format="RGBA")
-                            entity_packet = {'update': 'new_entity', 'string': bytes.decode(encoding='latin1'),
+                            image_bytes = pg.image.tobytes(surface, format="RGBA")
+                            entity_packet = {'update': 'new_entity', 'string': image_bytes.decode(encoding='latin1'),
                                              'width': surface.get_width(), 'height': surface.get_height(), 'ratio_x': x,
-                                             'ratio_y': y, 'id': entity.id}
+                                             'ratio_y': y, 'id': entity.id, 'name': entity.name}
                             self.send_packet(entity_packet)
                             entity.image_was_sent = True
                     cords_packet['entity:topright'].update(updated_cords)
                     self.send_packet(cords_packet)
-
+                    updated_cords = []
+                    for player in self.player_entities:
+                        updated_cords.append((player.id, self.get_cords_ratio(player)))
+                        if player.char_sheet.changed:
+                            packet = {'update': 'player_sheet', 'id': player.id,
+                                      'list': player.char_sheet.dump_to_list()}
+                            player.char_sheet.changed = False
+                            self.send_packet(packet)
+                    cords_packet = {'update': 'player_cords', 'entity:topright': {}}
+                    cords_packet['entity:topright'].update(updated_cords)
+                    self.send_packet(cords_packet)
             if event.type == pg_gui.UI_FILE_DIALOG_PATH_PICKED:
                 if event.ui_element == self.save_file_dialog:
                     savefile = SaveFile(ident=self.sprites_counter)
@@ -469,7 +433,7 @@ class HostBoard:
                         savefile.entities_data.append(
                             (pg.image.tobytes(image, format="RGBA"), (image.get_width(), image.get_height()),
                              self.get_cords_ratio(entity),
-                             entity.entity_list.textbox.html_text, entity.id))
+                             entity.entity_list.textbox.html_text, entity.id, entity.name))
                     savefile.map = pg.image.tobytes(self.map, format="RGBA")
                     savefile.map_size = self.map.get_size()
                     with open(event.text, 'wb') as file:
@@ -481,17 +445,17 @@ class HostBoard:
                     self.map_entities.clear()
                     self.deleted_entities.clear()
                     self.game_log.clear()
-                    savefile = SaveFile(1)
                     with open(event.text, 'rb') as file:
                         savefile = pickle.load(file)
                     self.map = pg.image.frombytes(savefile.map, savefile.map_size, format="RGBA")
                     self.sprites_counter = savefile.ident
-                    for tuple in savefile.entities_data:
+                    for data_tuple in savefile.entities_data:
                         try:
-                            cords = self.get_cords_from_ratio(*tuple[2])
+                            cords = self.get_cords_from_ratio(*data_tuple[2])
                             self.map_entities.append(
-                                Entity(scene_ui_manager=self.manager, bytes_image=tuple[0], size=tuple[1],
-                                       topright=cords, list_text=tuple[3], ident=tuple[4]))
+                                Entity(scene_ui_manager=self.manager, bytes_image=data_tuple[0], size=data_tuple[1],
+                                       topright=cords, list_text=data_tuple[3], ident=data_tuple[4],
+                                       name=data_tuple[5]))
                         except pg.error as e:
                             print(f"Error while loading saved entity, {e}")
                     self.game_log.append_html_text("Game loaded successfully.<br/>")
@@ -507,9 +471,10 @@ class HostBoard:
                         self.map = self.old_map
                 if event.ui_element == self.sprite_file_dialog:
                     try:
+                        name = Path(event.text).stem
                         self.map_entities.append(
                             Entity(image_path=event.text, scene_ui_manager=self.manager,
-                                   ident=next(self.sprites_counter)))
+                                   ident=next(self.sprites_counter), name=name))
                     except pg.error as error:
                         print(f'Error while creating entity: {error}')
 
@@ -528,9 +493,18 @@ class HostBoard:
                     self.load_file_dialog = None
 
             if event.type == NET_RECEIVED_UPDATE:
-                if event.__dict__['update'] == 'roll':
-                    data = event.__dict__
-                    self.roll_dice(data['name'], data['dice'])
+                d = event.__dict__
+                if d['update'] == 'roll':
+                    self.roll_dice(d['name'], d['dice'])
+                if d['update'] == 'new_player':
+                    self.player_entities.append(
+                        PlayerEntity(manager=self.manager, character_data=event.__dict__, ident=d['id']))
+                    for p in self.players:
+                        if p.id == str(d['id']):
+                            p.name = d['name']
+                            break
+                    self.send_packet(d)
+
             if config.debug:
                 if event.type == pg.KEYDOWN and event.key == pg.K_d:
                     print('debug mode on')
@@ -549,18 +523,11 @@ class HostBoard:
         self.send_packet(data)
 
     def send_map(self):
-        bytes = pg.image.tobytes(self.map, format="RGBA")
-        packet = {'update': 'map', 'string': bytes.decode(encoding='latin1'), 'width': self.map.get_width(),
+        image_bytes = pg.image.tobytes(self.map, format="RGBA")
+        packet = {'update': 'map', 'string': image_bytes.decode(encoding='latin1'), 'width': self.map.get_width(),
                   'height': self.map.get_height()}
         self.send_packet(packet)
         self.changed_map = False
-
-    def send_surface(self, surface):  # remake for client pp send
-        bytes = pg.image.tobytes(surface, format="RGBA")
-        # used latin1 because it eats any random byte string (can only extract image from pygame as string)
-        packet = {'update': 'new_entity', 'string': bytes.decode(encoding='latin1'), 'width': surface.get_width(),
-                  'height': surface.get_height()}
-        self.send_packet(packet)
 
     def send_packet(self, unencoded_packet):
         packet = json.dumps(unencoded_packet).encode()
@@ -595,4 +562,95 @@ class HostBoard:
         delta_x, delta_y = self.map.get_rect().topleft
         x = delta_x + self.map.get_rect().width * ratio_x
         y = delta_y + self.map.get_rect().height * ratio_y
-        return (x, y)
+        return x, y
+
+
+class SaveFile:
+    def __init__(self, ident):
+        # can use pickle because saves are local for host
+        # json for over-tcp packages
+        self.entities_data = []
+        self.ident = ident
+        self.map = pg.Surface((10, 10))
+        self.map_size = (0, 0)
+
+
+class PlayerData:
+    def __init__(self, ident):
+        self.id = str(ident)
+        self.name = 'clientName'
+        self.send_channel, self.receive_channel = trio.open_memory_channel(max_buffer_size=config.max_buffer_size)
+
+
+class SaveFileDialog(UIFileDialog):
+    def __init__(self, text, init_path, scene_ui_manager):
+        super().__init__(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
+                         window_title=text,
+                         initial_file_path=init_path,
+                         allow_picking_directories=False,
+                         allow_existing_files_only=True,
+                         allowed_suffixes={""}, object_id="#save_dialog", manager=scene_ui_manager)
+        self.refresh_button.kill()
+        self.delete_button.kill()
+        self.parent_directory_button.kill()
+        self.home_button.kill()
+        self.create_btn = UIButton(relative_rect=pg.Rect(10, 10, -1, 30), text="Or create new save with name:",
+                                   container=self, manager=scene_ui_manager)
+        self.new_save_text_line = UITextEntryLine(
+            relative_rect=pg.Rect(self.create_btn.relative_rect.right, 10,
+                                  self.file_path_text_line.rect.width - self.create_btn.relative_rect.width, 30),
+            container=self,
+            initial_text="",
+            object_id="#save_textline", manager=scene_ui_manager)
+
+    def process_event(self, event):
+        super().process_event(event)
+        if event.type == pg_gui.UI_BUTTON_PRESSED and event.ui_element == self.create_btn:
+            filename = self.new_save_text_line.get_text()
+            if not filename:
+                return
+            filename = Path(self.current_directory_path) / filename
+            try:
+                # noinspection PyUnusedLocal
+                savefile = open(filename, 'w')
+                # create savefile for future character
+            except OSError:
+                print(f'Error while creating savefile with name {filename}')
+                return
+            self.update_current_file_list()
+            self.file_selection_list.set_item_list(self.current_file_list)
+
+
+class MapFileDialog(UIFileDialog):
+    def __init__(self, text, init_path, scene_ui_manager):
+        super().__init__(pg.Rect(0, 0, config.width // 3, (config.height * 2) // 3),
+                         window_title=text,
+                         initial_file_path=init_path,
+                         allow_picking_directories=False,
+                         allow_existing_files_only=True,
+                         allowed_suffixes={""}, object_id="#map_dialog", manager=scene_ui_manager)
+        self.refresh_button.kill()
+        self.delete_button.kill()
+        self.parent_directory_button.kill()
+        self.home_button.kill()
+        self.map_prompt_text_line = UITextEntryLine(
+            relative_rect=pg.Rect(10, 40, self.get_container().get_size()[0] - 20, -1), container=self,
+            initial_text="",
+            object_id="#prompt_textline", manager=scene_ui_manager)
+        self.map_prompt_text_line.hide()
+        self.gen_btn = UIButton(relative_rect=pg.Rect(10, 10, -1, 30), text="Generate by description",
+                                container=self, manager=scene_ui_manager)
+        self.gen_btn.disable()
+
+    def process_event(self, event):
+        super().process_event(event)
+        if event.type == pg_gui.UI_TEXT_ENTRY_FINISHED and event.ui_element == self.map_prompt_text_line:
+            generated_map_path = similar_description(self.map_prompt_text_line.get_text())[0]
+            event_data = {'text': str(generated_map_path),
+                          'ui_element': self,
+                          'ui_object_id': self.most_specific_combined_id}
+            pg.event.post(pg.event.Event(pg_gui.UI_FILE_DIALOG_PATH_PICKED, event_data))
+            self.kill()
+        if event.type == pg_gui.UI_BUTTON_PRESSED and event.ui_element == self.gen_btn:
+            self.file_path_text_line.hide()
+            self.map_prompt_text_line.show()

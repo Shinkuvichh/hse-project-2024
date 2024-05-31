@@ -97,16 +97,134 @@
       "border_width": "0"
     }
   },
-  "#icon_button": {
+  "#char_icon_button": {
+    "images": {
+      "normal_image": {
+        "path": "resources/__charicon.png",
+        "sub_surface_rect": "0,0,30,30"
+      },
+      "hovered_image": {
+        "path": "resources/__charicon.png",
+        "sub_surface_rect": "0,0,30,30"
+      }
+    }
+  },
+  "#client_entity_icon_button": {
+    "images": {
+      "normal_image": {
+        "path": "resources/__charicon.png",
+        "sub_surface_rect": "0,0,30,30"
+      },
+      "hovered_image": {
+        "path": "resources/__charicon.png",
+        "sub_surface_rect": "0,0,30,30"
+      }
+    }
+  },
+  "#entity_icon_button": {
     "images": {
       "normal_image": {
         "path": "resources/__monstericon.png",
-        "sub_surface_rect" : "0,0,30,30"
+        "sub_surface_rect": "0,0,30,30"
       },
       "hovered_image": {
         "path": "resources/__monstericon.png",
-        "sub_surface_rect" : "0,0,30,30"
+        "sub_surface_rect": "0,0,30,30"
       }
+    }
+  },
+  "#textline": {
+    "colours": {
+      "dark_bg": "#DCDCDC",
+      "normal_text": "#000000",
+      "selected_bg": "#FFFFFF"
+    },
+    "font": {
+      "name": "freesansbold",
+      "size": "22"
+    },
+    "misc": {
+      "borded_width": "0"
+    }
+  },
+  "@charsheet": {
+    "font": {
+      "name": "CrimsonText",
+      "size": "25"
+    },
+    "misc": {
+      "padding": "0,0",
+      "shadow_width": "1"
+    }
+  },
+  "@charsheet_label": {
+    "font": {
+      "name": "CrimsonText",
+      "size": "25"
+    },
+    "misc": {
+      "shadow_width": "1",
+      "text_horiz_alignment": "left"
+    },
+    "colours": {
+      "normal_text": "#303030"
+    }
+  },
+  "label": {
+    "font": {
+      "name": "CrimsonText",
+      "size": "22"
+    }
+  },
+  "#skills_box": {
+    "font": {
+      "name": "CrimsonText",
+      "size": "21"
+    },
+    "misc": {
+      "padding": "1,0",
+      "line_spacing": "1.108",
+      "shadow_width": "0",
+      "border_width": "1",
+      "text_vert_alignment": "bottom"
+    }
+  },
+  "#other_box": {
+    "font": {
+      "name": "CrimsonText",
+      "size": "19"
+    },
+    "misc": {
+      "padding": "1,0",
+      "line_spacing": "1",
+      "shadow_width": "0",
+      "border_width": "1",
+      "text_vert_alignment": "default"
+    }
+  },
+  "#player_entity": {
+  	"misc": {
+  	 "shadow_width": "0"
+  	}
+  },
+  "#skills_line": {
+    "misc": {
+      "shadow_width": "0"
+    }
+  },
+  "#lvl_line": {
+    "font": {
+      "name": "CrimsonText",
+      "size": "25"
+    },
+    "misc": {
+      "padding": "0.1,0"
+    }
+  },
+  "#lvl_label": {
+    "font": {
+      "name": "CrimsonText",
+      "size": "25"
     }
   }
 }
